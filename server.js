@@ -15,6 +15,9 @@ const __dirname = path.dirname(__filename);
 // Загрузка переменных окружения
 dotenv.config();
 
+// Log the environment variables to the console
+console.log("ENV:", process.env);
+
 // Создание Express приложения
 const app = express();
 const PORT = 4001;
