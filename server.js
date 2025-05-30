@@ -165,6 +165,6 @@ const deleteOldFiles = () => {
 setInterval(deleteOldFiles, 24 * 60 * 60 * 1000);
 
 // Запуск сервера
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
