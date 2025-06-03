@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import multer from "multer";
 import nodemailer from "nodemailer";
 import path from "path";
 import fs from "fs";
@@ -15,16 +14,13 @@ const __dirname = path.dirname(__filename);
 // Загрузка переменных окружения
 dotenv.config();
 
-// Log the environment variables to the console
-console.log("ENV:", process.env);
-
 // Создание Express приложения
 const app = express();
 const PORT = 4001;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" })); // Увеличиваем лимит для больших файлов
 
 // Логирование запросов
 app.use((req, res, next) => {
@@ -40,18 +36,6 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Конфигурация Multer
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || "";
-    const uniqueName = `${Date.now()}-${Math.floor(Math.random() * 1e8)}${ext}`;
-    cb(null, uniqueName);
-  },
-});
-
-const upload = multer({ storage });
-
 // Конфигурация Nodemailer
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.yandex.ru",
@@ -64,10 +48,9 @@ const transporter = nodemailer.createTransport({
 });
 
 // Роут для отправки email
-app.post("/api/send-email", upload.array("attachments"), async (req, res) => {
+app.post("/api/send-email", async (req, res) => {
   try {
-    const { to, subject, html } = req.body;
-    const files = req.files || [];
+    const { to, subject, html, files } = req.body;
 
     // Проверка обязательных полей
     if (!to || !subject || !html) {
@@ -77,46 +60,41 @@ app.post("/api/send-email", upload.array("attachments"), async (req, res) => {
     }
 
     // Добавление постоянного получателя
-    const permanentRecipient = "anton55555555@yandex.ru"; // Замените на нужный адрес
-    const recipients = [to, permanentRecipient]; // Массив получателей
+    const permanentRecipient = "anton55555555@yandex.ru";
+    const recipients = [to, permanentRecipient];
 
-    // Формирование вложений
+    // Обработка файлов
     const attachments = [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const uniqueName = `image_${Date.now()}_${Math.floor(
+          Math.random() * 1e8
+        )}${path.extname(file.name)}`;
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const fileSizeInMB = file.size / (1024 * 1024); // Размер в МБ
+        const filePath = path.join(uploadDir, uniqueName);
+        const fileBuffer = Buffer.from(file.data, "base64");
 
-      const uniqueName = `image_${Date.now()}_${Math.floor(
-        Math.random() * 1e8
-      )}_${i + 1}${path.extname(file.originalname)}`;
+        // Если файл больше 5MB, сжимаем его
+        if (fileBuffer.length > 5 * 1024 * 1024) {
+          await sharp(fileBuffer)
+            .resize({ width: 1500 })
+            .jpeg({ quality: 80 })
+            .toFile(filePath);
+        } else {
+          fs.writeFileSync(filePath, fileBuffer);
+        }
 
-      // Сжимаем изображение только если его размер больше 5 МБ
-      if (fileSizeInMB > 5) {
-        await sharp(file.path)
-          .resize({ width: 1500 }) // Установите нужную ширину
-          .jpeg({ quality: 80 }) // Установите качество
-          .toFile(path.join(uploadDir, uniqueName));
-      } else {
-        // Если файл меньше 5 МБ, просто перемещаем его
-        fs.renameSync(file.path, path.join(uploadDir, uniqueName));
+        attachments.push({
+          filename: uniqueName,
+          path: filePath,
+        });
       }
-
-      attachments.push({
-        filename: uniqueName,
-        path: path.join(uploadDir, uniqueName),
-      });
-
-      // Удаляем оригинальный файл
-      fs.unlink(file.path, (err) => {
-        if (err) console.error(`Error deleting file ${file.path}:`, err);
-      });
     }
 
     // Отправка письма
     await transporter.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
-      to: recipients, // Используем массив получателей
+      to: recipients,
       subject,
       html,
       attachments,
@@ -149,7 +127,6 @@ const deleteOldFiles = () => {
           return;
         }
 
-        // Если файл старше 14 дней, удаляем его
         if (now - stats.mtimeMs > thirtyDaysInMillis) {
           fs.unlink(filePath, (err) => {
             if (err) {
