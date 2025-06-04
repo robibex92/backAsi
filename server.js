@@ -50,10 +50,17 @@ const transporter = nodemailer.createTransport({
 // Роут для отправки email
 app.post("/api/send-email", async (req, res) => {
   try {
+    console.log("Received email request:", {
+      to: req.body.to,
+      subject: req.body.subject,
+      hasFiles: req.body.files ? req.body.files.length : 0,
+    });
+
     const { to, subject, html, files } = req.body;
 
     // Проверка обязательных полей
     if (!to || !subject || !html) {
+      console.log("Missing required fields:", { to, subject, hasHtml: !!html });
       return res.status(400).json({
         error: "Missing required fields: to, subject, html",
       });
@@ -62,10 +69,12 @@ app.post("/api/send-email", async (req, res) => {
     // Добавление постоянного получателя
     const permanentRecipient = "anton55555555@yandex.ru";
     const recipients = [to, permanentRecipient];
+    console.log("Email recipients:", recipients);
 
     // Обработка файлов
     const attachments = [];
     if (files && files.length > 0) {
+      console.log(`Processing ${files.length} files`);
       for (const file of files) {
         const uniqueName = `image_${Date.now()}_${Math.floor(
           Math.random() * 1e8
@@ -73,15 +82,21 @@ app.post("/api/send-email", async (req, res) => {
 
         const filePath = path.join(uploadDir, uniqueName);
         const fileBuffer = Buffer.from(file.data, "base64");
+        console.log(
+          `Processing file: ${file.name}, size: ${fileBuffer.length} bytes`
+        );
 
         // Если файл больше 5MB, сжимаем его
         if (fileBuffer.length > 5 * 1024 * 1024) {
+          console.log(`File ${file.name} is larger than 5MB, compressing...`);
           await sharp(fileBuffer)
             .resize({ width: 1500 })
             .jpeg({ quality: 80 })
             .toFile(filePath);
+          console.log(`File compressed and saved to: ${filePath}`);
         } else {
           fs.writeFileSync(filePath, fileBuffer);
+          console.log(`File saved to: ${filePath}`);
         }
 
         attachments.push({
@@ -92,7 +107,14 @@ app.post("/api/send-email", async (req, res) => {
     }
 
     // Отправка письма
-    await transporter.sendMail({
+    console.log("Attempting to send email with configuration:", {
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: recipients,
+      subject,
+      attachmentsCount: attachments.length,
+    });
+
+    const info = await transporter.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to: recipients,
       subject,
@@ -100,9 +122,18 @@ app.post("/api/send-email", async (req, res) => {
       attachments,
     });
 
-    res.json({ success: true });
+    console.log("Email sent successfully:", {
+      messageId: info.messageId,
+      response: info.response,
+    });
+
+    res.json({ success: true, messageId: info.messageId });
   } catch (error) {
-    console.error("Email sending error:", error.message);
+    console.error("Email sending error:", {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+    });
     res
       .status(500)
       .json({ error: "Internal server error", details: error.message });
