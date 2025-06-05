@@ -21,7 +21,7 @@ const PORT = 4001;
 // Middleware
 app.use(
   cors({
-    origin: "https://asicredinvest.md",
+    origin: "https://asi.asicredinvest.md",
     credentials: true,
   })
 );
