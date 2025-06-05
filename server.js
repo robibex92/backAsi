@@ -19,7 +19,12 @@ const app = express();
 const PORT = 4001;
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: "https://asicredinvest.md",
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: "50mb" })); // Увеличиваем лимит для больших файлов
 
 // Логирование запросов
@@ -37,14 +42,36 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 // Конфигурация Nodemailer
+console.log("SMTP Configuration:", {
+  host: process.env.SMTP_HOST || "asicredinvest.md",
+  port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465,
+  user: process.env.SMTP_USER,
+  from: process.env.SMTP_FROM || process.env.SMTP_USER,
+  secure: true,
+});
+
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.yandex.ru",
+  host: process.env.SMTP_HOST || "asicredinvest.md",
   port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465,
   secure: true,
   auth: {
-    user: process.env.SMTP_USER,
+    user: process.env.SMTP_USER || "support@asicredinvest.md",
     pass: process.env.SMTP_PASS,
   },
+  debug: true,
+  logger: true,
+  tls: {
+    rejectUnauthorized: false,
+  },
+});
+
+// Verify SMTP connection configuration
+transporter.verify(function (error, success) {
+  if (error) {
+    console.log("SMTP Connection Error:", error);
+  } else {
+    console.log("SMTP Server is ready to take our messages");
+  }
 });
 
 // Роут для отправки email
