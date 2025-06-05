@@ -19,12 +19,7 @@ const app = express();
 const PORT = 4001;
 
 // Middleware
-app.use(
-  cors({
-    origin: "https://asi.asicredinvest.md",
-    credentials: true,
-  })
-);
+app.use(cors());
 app.use(express.json({ limit: "50mb" })); // Увеличиваем лимит для больших файлов
 
 // Логирование запросов
